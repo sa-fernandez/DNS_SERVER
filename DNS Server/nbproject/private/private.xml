@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project-private xmlns="http://www.netbeans.org/ns/project-private/1">
+    <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/2" lastBookmarkId="0"/>
+    <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/2">
+        <group>
+            <file>file:/home/fercho/NetBeansProjects/DNS%20Server/src/entidades/HeaderDns.java</file>
+            <file>file:/home/fercho/NetBeansProjects/DNS%20Server/src/entidades/ServerDns.java</file>
+            <file>file:/home/fercho/NetBeansProjects/DNS%20Server/src/database/HostAddressJpaController.java</file>
+            <file>file:/home/fercho/NetBeansProjects/DNS%20Server/src/entidades/MessageDns.java</file>
+            <file>file:/home/fercho/NetBeansProjects/DNS%20Server/src/entidades/AnswerDns.java</file>
+            <file>file:/home/fercho/NetBeansProjects/DNS%20Server/src/dns/server/DNSServer.java</file>
+            <file>file:/home/fercho/NetBeansProjects/DNS%20Server/src/database/HostAddress.java</file>
+            <file>file:/home/fercho/NetBeansProjects/DNS%20Server/src/entidades/QuestionDns.java</file>
+        </group>
+    </open-files>
+</project-private>
