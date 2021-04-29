@@ -6,6 +6,8 @@
 package entidades;
 
 import database.HostAddress;
+import database.HostAddressIPv6;
+import database.HostAddressIPv6JpaController;
 import database.HostAddressJpaController;
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -159,7 +161,7 @@ public class ServerDns {
         return mensaje;
     }
     
-    public byte[] creacionRespuesta(MessageDns mensajeRecibido) throws UnknownHostException, SocketException{
+    public byte[] respuestaIpv4(MessageDns mensajeRecibido) throws UnknownHostException, SocketException{
         byte[] datos;
         MessageDns respuesta = new MessageDns();
         HeaderDns header = new HeaderDns();
@@ -234,6 +236,129 @@ public class ServerDns {
             respuesta.setQuestion(mensajeRecibido.getQuestion());
             respuesta.setAnswer(answer);
             datos = this.dataEnvio(respuesta);
+        }
+        return datos;
+    }
+    
+    public byte[] respuestaIpv6(MessageDns mensajeRecibido) throws UnknownHostException, SocketException{
+        byte[] datos;
+        MessageDns respuesta = new MessageDns();
+        HeaderDns header = new HeaderDns();
+        List<AnswerDns> answer = new ArrayList<AnswerDns>();//Lista de posibles respuestas
+        header.setId(mensajeRecibido.getHeader().getId());//Se le agrega el mismo id del mensaje recibido
+        String dominio = this.conversorDominio(mensajeRecibido.getQuestion().getQname());//Convierte los bytes a string
+        EntityManagerFactory emf = Persistence.createEntityManagerFactory("DNS_ServerPU");
+        HostAddressIPv6JpaController controlador = new HostAddressIPv6JpaController(emf);
+        List<HostAddressIPv6> dirs = new ArrayList<HostAddressIPv6>();//Direcciones ip con base en el masterfile
+        List<HostAddressIPv6> tDirs = controlador.findHostAddressIPv6Entities();
+        for(HostAddressIPv6 d : tDirs){//Consulta en base de datos MySQL
+            if(d.getDominio().equals(dominio)){
+                dirs.add(d);//Encontramos las direcciones cuyo dominio sea el pedido
+            }
+        }
+        if(dirs.isEmpty()){//No encuentra resultado en base de datos (NO AUTORITATIVA)
+            datos = this.consultaExterna(mensajeRecibido);
+        }else{//Encuentra resultado en base de datos (AUTORITATIVA)
+            //Construccion del header
+            
+            header.setFlags(mensajeRecibido.getHeader().getFlags());
+            header.getFlags()[0] += 0x084;//Sumamos 132 para que QR->1 y AA->1
+            short s1 = (short) dirs.size();//ANCOUNT
+            header.setQdcount(mensajeRecibido.getHeader().getQdcount());
+            header.setAncount(s1);
+            short cero = 0;
+            header.setNscount(cero);
+            header.setArcount(cero);
+            
+            //Fin de construccion del header
+            
+            //Construccion de las answers
+            
+            for(HostAddressIPv6 h : dirs){
+                AnswerDns res = new AnswerDns();
+                byte[] apName = new byte[2];//NAME
+                apName[0] = (byte) 0xc0;
+                apName[1] = (byte) 0x0c;
+                res.setName(apName);
+                byte[] tipo = new byte[2];//TYPE: AAAA
+                tipo[0] = 0x00;
+                tipo[1] = 0x1c;
+                res.setType(tipo);
+                byte[] clase = new byte[2];//CLASS: IN
+                clase[0] = 0x00;
+                clase[1] = 0x01;
+                res.setClassA(clase);
+                Random rand = new Random();//TTL
+                int random = rand.nextInt(254);
+                res.setTtl(random);
+                byte[] dataL = new byte[2];//RDLENGHT: 10
+                dataL[0] = 0x00;
+                dataL[1] = 0x10;
+                res.setRdlenght(dataL);
+                String ip = h.getIp();//RDATA(IP)                
+                String[]cad = ip.split(":");
+                byte[] b = new byte[16];
+                int i = 0;
+                char x, y;
+                String aux, aux1;
+                for(String s : cad){
+                    if(s.length() == 1 || s.length() == 2){
+                        b[i] = 0x00;
+                        i++;
+                        x = (char) Integer.parseInt(s, 16);
+                        b[i] = (byte) x;
+                    }else if(s.length() == 3){
+                        y = s.charAt(0);
+                        aux = String.valueOf(y);
+                        x = (char) Integer.parseInt(aux, 16);
+                        b[i] = (byte) x;
+                        i++;
+                        y = s.charAt(1);
+                        aux = String.valueOf(y);
+                        y = s.charAt(2);
+                        aux1 = String.valueOf(y);
+                        aux += aux1;
+                        x = (char) Integer.parseInt(aux, 16);
+                        b[i] = (byte) x;
+                    }else if(s.length() == 4){
+                        y = s.charAt(0);
+                        aux = String.valueOf(y);
+                        y = s.charAt(1);
+                        aux1 = String.valueOf(y);
+                        aux += aux1;
+                        x = (char) Integer.parseInt(aux, 16);
+                        b[i] = (byte) x;
+                        i++;
+                        y = s.charAt(2);
+                        aux = String.valueOf(y);
+                        y = s.charAt(3);
+                        aux1 = String.valueOf(y);
+                        aux += aux1;
+                        x = (char) Integer.parseInt(aux, 16);
+                        b[i] = (byte) x;
+                    }
+                    i++;
+                }
+                
+                res.setRdata(b);
+                answer.add(res);//Annadimos la respuesta a la lista de answers
+            }
+            
+            //Fin de construccion de las answers
+            respuesta.setHeader(header);
+            respuesta.setQuestion(mensajeRecibido.getQuestion());
+            respuesta.setAnswer(answer);
+            datos = this.dataEnvio(respuesta);
+        }
+        return datos;
+    }
+    
+    public byte[] creacionRespuesta(MessageDns mensajeRecibido) throws UnknownHostException, SocketException{
+        byte[] datos = new byte[65507];
+        if(mensajeRecibido.getQuestion().getQtype()[1] == 0x01){//IPv4
+            datos = this.respuestaIpv4(mensajeRecibido);
+        }else if(mensajeRecibido.getQuestion().getQtype()[1] == 0x1c){//IPv6
+            datos = this.respuestaIpv6(mensajeRecibido);
         }
         return datos;
     }
